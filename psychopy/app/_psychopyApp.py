@@ -826,7 +826,7 @@ class PsychoPyApp(wx.App, handlers.ThemeMixin):
         # have to reimport because it is only local to __init__ so far
         from . import coder
         if self.coder is None:
-            title = "PsychoPy Coder (v{version}{beta})".format(
+            title = "WrysysLab Coder (v{version}{beta})".format(
                 version=self.version,
                 beta="beta" if self.beta else ""
             )
@@ -924,7 +924,7 @@ class PsychoPyApp(wx.App, handlers.ThemeMixin):
         # have to reimport because it is only local to __init__ so far
         from .runner.runner import RunnerFrame
         
-        title = 'PsychoPy Runner (v{version}{beta})'.format(
+        title = 'WrysysLab Runner (v{version}{beta})'.format(
             version=self.version,
             beta="beta" if self.beta else ""
         )

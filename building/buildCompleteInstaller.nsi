@@ -1,7 +1,7 @@
 
 ; HM NIS Edit Wizard helper defines
 !define PRODUCT_PUBLISHER "QDDYZS Ltd"
-!define PRODUCT_WEB_SITE "https://www.psychopy.org"
+!define PRODUCT_WEB_SITE "https://www.qddyzs.net/"
 ;!define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\AppMainExe.exe"
 !define ARCH "win64"
 !define PRODUCT_NAME "Wrysyslab"
@@ -19,7 +19,7 @@
 !define MULTIUSER_EXECUTIONLEVEL Highest
 !define MULTIUSER_MUI
 !define MULTIUSER_INSTALLMODE_COMMANDLINE
-!define MULTIUSER_INSTALLMODE_INSTDIR "PsychoPy"
+!define MULTIUSER_INSTALLMODE_INSTDIR "Wrysyslab"
 !if ${ARCH} == "win64"
   !define MULTIUSER_USE_PROGRAMFILES64  ; this is a 64bit app
 !endif
