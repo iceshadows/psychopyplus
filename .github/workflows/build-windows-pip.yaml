@@ -36,7 +36,10 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'
+          cache: pip
+          # 让 pip cache 依赖 pyproject
+          cache-dependency-path: |
+            pyproject.toml
 
       - name: Install build dependencies
         run: |
@@ -44,6 +47,11 @@ jobs:
 
       - name: Display Python version
         run: python -c "import sys; print(sys.version)"
+
+      # 按照相对仓库根路径安装本地 whl
+      - name: Install wearlab_protocolX wheel
+        run: |
+          pip install thirdParty/wearlab_protocolX-0.3.2a0-cp310-cp310-win_amd64.whl
 
       - name: Install project dependencies
         run: |
