@@ -387,7 +387,7 @@ msgstr ""
 
 #: app/_psychopyApp.py:439
 #, python-brace-format
-msgid "Copyright (C) {year} OpenScienceTools.org"
+msgid "Copyright (C) {year} Qingdao Dengyun Tech Ltd."
 msgstr ""
 
 #: app/_psychopyApp.py:482

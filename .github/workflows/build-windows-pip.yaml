@@ -1,0 +1,151 @@
+name: Build Windows pip
+
+on:
+  workflow_dispatch:
+    inputs:
+      python_version:
+        description: 'Python version'
+        required: false
+        default: '3.10'
+        type: choice
+        options:
+          - '3.10'
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: ['3.10']
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          # 让 pip cache 依赖 pyproject
+          cache-dependency-path: |
+            pyproject.toml
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel build twine
+  
+
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+
+      # 按照相对仓库根路径安装本地 whl
+      - name: Install wearlab_protocolX wheel
+        run: |
+          pip install thirdParty/wearlab_protocolX-0.3.2a0-cp310-cp310-win_amd64.whl
+
+      - name: Install project dependencies
+        run: |
+          pip install -e ".[dev]" || pip install -e .
+
+      - name: Build Language POs
+        run: |
+          python -m pip install polib
+          python building/compile_po.py
+  
+
+      - name: Build wheel and sdist
+        run: |
+          python -m build
+
+      - name: Check build artifacts
+        run: |
+          python -m twine check dist/*
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-pip-${{ matrix.python-version }}
+          path: dist/
+          retention-days: 30
+
+      - name: Detect Python path (for NSIS)
+        if: matrix.python-version == '3.10'
+        shell: powershell
+        run: |
+          $pyExe = python -c "import sys; print(sys.executable)"
+          $pyDir = Split-Path $pyExe -Parent
+          echo "PYPATH=$pyDir" >> $env:GITHUB_ENV
+
+      - name: Install NSIS
+        run: |
+          choco install nsis -y
+
+      - name: Detect Python path (for NSIS)
+        if: matrix.python-version == '3.10'
+        shell: powershell
+        run: |
+          $pyExe = python -c "import sys; print(sys.executable)"
+          $pyDir = Split-Path $pyExe -Parent
+          echo "PYPATH=$pyDir" >> $env:GITHUB_ENV
+      # 查找 makensis.exe，复制 EnVar.dll 插件到 NSIS 的 Plugins\x86-unicode
+      - name: Install NSIS EnVar plugin
+        if: matrix.python-version == '3.10'
+        shell: powershell
+        run: |
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\NSIS\Bin\makensis.exe",
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+            "${env:ProgramFiles}\NSIS\Bin\makensis.exe",
+            "${env:ProgramFiles}\NSIS\makensis.exe"
+          )
+          $makensis = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          Write-Host "makensis.exe = $makensis"
+          $nsisBin  = Split-Path $makensis -Parent
+          $nsisRoot = Split-Path $nsisBin  -Parent
+          Write-Host "NSIS root = $nsisRoot"
+          $pluginDir = Join-Path $nsisRoot "Plugins\x86-unicode"
+          Write-Host "Plugin dir = $pluginDir"
+          New-Item -ItemType Directory -Force -Path $pluginDir | Out-Null
+          Copy-Item -Force "nsis-plugins\EnVar.dll" $pluginDir
+        # 直接调用 makensis 构建安装包，传入 PYPATH / PRODUCT_NAME / PRODUCT_VERSION / ARCH
+      - name: Build NSIS installer (Python 3.10)
+        if: matrix.python-version == '3.10'
+        shell: powershell
+        env:
+          PYPATH: ${{ env.PYPATH }}
+          PRODUCT_NAME: PsychoPyPlus
+          PRODUCT_VERSION: ${{ github.ref_name }}   # 比如 v1.2.3
+          ARCH: x64
+        run: |
+          $script = "building\buildCompleteInstaller.nsi"
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\NSIS\Bin\makensis.exe",
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+            "${env:ProgramFiles}\NSIS\Bin\makensis.exe",
+            "${env:ProgramFiles}\NSIS\makensis.exe"
+          )
+          $makensis = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          & $makensis `
+            /V4 `
+            /DPYPATH="${env:PYPATH}" `
+            $script
+      - name: Upload NSIS installer artifact
+        if: matrix.python-version == '3.10'
+        uses: actions/upload-artifact@v4
+        with:
+          name: psychopy-installer-win-py310
+          # 按你的 .nsi 脚本实际输出路径调整
+          path: |
+            **/*.exe
+          retention-days: 30

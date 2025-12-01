@@ -524,7 +524,7 @@ class PavloviaSession:
                     "This may be caused by having an institutional proxy server but "
                     "not setting the proxy setting in PsychoPy preferences. If that "
                     "isn't the case for you, then please get in touch so we can work out "
-                    "what the cause was in your case! support@opensciencetools.org")
+                    "what the cause was in your case! support@wearlab.tech")
             
             self.username = self.gitlab.user.username
             self.userID = self.gitlab.user.id  # populate when token property is set

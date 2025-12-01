@@ -12,7 +12,7 @@
         New workshop! "The EEG Research Pipeline" Join us in Nottingham in December for our bootcamp!
 
     .. grid-item-card:: :octicon:`info` News
-        :link: https://opensciencetools.org/
+        :link: https://wearlab.tech/
 
         Did you know PsychoPy is supported by our company, Open Science Tools? find out more here.
 
@@ -74,7 +74,7 @@ How is PsychoPy Free?
 
         The PsychoPy desktop application is `free to download <https://www.psychopy.org/download.html>`__ and run for in-lab studies. PsychoPy® was written `by scientists <https://github.com/psychopy/psychopy/graphs/contributors>`__ for scientists, the code underlying the software is open source on `GitHub <https://github.com/psychopy>`__, so even if you want to change the software you can!
 
-        As PsychoPy grew in popularity, it became clear that developing it "as a side project" in researchers spare time was not going to be sustainable. We now have a company, `Open Science Tools <https://opensciencetools.org/>`__, to sustain professional development. We have three main sources of revenue:
+        As PsychoPy grew in popularity, it became clear that developing it "as a side project" in researchers spare time was not going to be sustainable. We now have a company, `Open Science Tools <https://wearlab.tech/>`__, to sustain professional development. We have three main sources of revenue:
 
         * `Pavlovia.org <https://pavlovia.org/>`__ licenses: A platform for hosting your study online if you want to collect data via a URL link.
         * `Consultancy <https://psychopy.org/consultancy.html>`__: Yes, you can pay us to make your task for you!

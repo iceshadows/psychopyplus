@@ -17,8 +17,8 @@ __version__ = getVersion()
 __git_sha__ = (pathlib.Path(__file__).parent/"GIT_SHA").read_text(encoding="utf-8").strip()
 __license__ = 'GPL v3'
 __author__ = 'Open Science Tools Ltd'
-__author_email__ = 'support@opensciencetools.org'
-__maintainer_email__ = 'support@opensciencetools.org'
+__author_email__ = 'support@wearlab.tech'
+__maintainer_email__ = 'support@wearlab.tech'
 __url__ = 'https://www.psychopy.org/'
 __download_url__ = 'https://github.com/psychopy/psychopy/releases/'
 __build_platform__ = 'n/a'

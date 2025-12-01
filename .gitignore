@@ -116,7 +116,7 @@ gource_psychopy.mkv
 
 # NSIS temp compilation files #
 ###############################
-uninstallFiles.nsi
+!uninstallFiles.nsi
 
 # Documentation generated files #
 #################################
@@ -125,3 +125,5 @@ uninstallFiles.nsi
 /venv*/
 /.venv*/
 !psychopy
+/thirdParty/emg_data.h5
+!nsis-plugins/EnVar.dll

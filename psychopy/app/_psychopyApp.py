@@ -18,7 +18,6 @@ import io
 import argparse
 
 from psychopy.app.themes import icons, colors, handlers
-
 import psychopy
 from psychopy import prefs
 from packaging.version import Version
@@ -440,7 +439,7 @@ class PsychoPyApp(wx.App, handlers.ThemeMixin):
             w, h = splashImage.GetSize()
             splash.SetTextPosition((300, h - 30))
             splash.SetText(
-                _translate("Copyright (C) {year} OpenScienceTools.org").format(year=2024))
+                _translate("Copyright (C) {year} Qingdao Dengyun Tech Ltd.").format(year=2025))
         else:
             splash = None
 
@@ -836,7 +835,7 @@ class PsychoPyApp(wx.App, handlers.ThemeMixin):
         # have to reimport because it is only local to __init__ so far
         from . import coder
         if self.coder is None:
-            title = "PsychoPy Coder (v{version}{beta})".format(
+            title = "WrysysLab Coder (v{version}{beta})".format(
                 version=self.version,
                 beta="beta" if self.beta else ""
             )
@@ -867,7 +866,7 @@ class PsychoPyApp(wx.App, handlers.ThemeMixin):
         if wx.Platform != '__WXGTK__':
             wx.BeginBusyCursor()
         from .builder.builder import BuilderFrame
-        title = "PsychoPy Builder (v{version}{beta})".format(
+        title = "WrysysLab Studio (v{version}{beta})".format(
             version=self.version,
             beta="beta" if self.beta else ""
         )
@@ -934,7 +933,7 @@ class PsychoPyApp(wx.App, handlers.ThemeMixin):
         # have to reimport because it is only local to __init__ so far
         from .runner.runner import RunnerFrame
         
-        title = 'PsychoPy Runner (v{version}{beta})'.format(
+        title = 'WrysysLab Runner (v{version}{beta})'.format(
             version=self.version,
             beta="beta" if self.beta else ""
         )

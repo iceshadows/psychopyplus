@@ -23,7 +23,7 @@ finalDistFolder = thisFolder.parent.parent/'dist'
 ENTITLEMENTS = (thisFolder / "entitlements.plist").absolute()
 assert ENTITLEMENTS.exists()
 BUNDLE_ID = "org.opensciencetools.psychopy"
-USERNAME = "admin@opensciencetools.org"
+USERNAME = "admin@wearlab.tech"
 
 SIGN_ALL = True
 logFile = open("_lastCodeSign.log", "w")
