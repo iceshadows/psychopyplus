@@ -229,7 +229,7 @@ class BuilderFrame(BaseAuiFrame, handlers.ThemeMixin):
                           )
         self._mgr.AddPane(self.routinePanel,
                           aui.AuiPaneInfo().
-                          Name("Routines").Caption("Routines").CaptionVisible(True).
+                          Name("Routines").Caption(_translate("Routines")).CaptionVisible(True).
                           Floatable(False).
                           Movable(False).
                           CloseButton(False).MaximizeButton(True).PaneBorder(False).

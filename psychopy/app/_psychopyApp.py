@@ -18,7 +18,6 @@ import io
 import argparse
 
 from psychopy.app.themes import icons, colors, handlers
-
 import psychopy
 from psychopy import prefs
 from packaging.version import Version
@@ -858,7 +857,7 @@ class PsychoPyApp(wx.App, handlers.ThemeMixin):
         if wx.Platform != '__WXGTK__':
             wx.BeginBusyCursor()
         from .builder.builder import BuilderFrame
-        title = "PsychoPy Builder (v{version}{beta})".format(
+        title = "WrysysLab Studio (v{version}{beta})".format(
             version=self.version,
             beta="beta" if self.beta else ""
         )

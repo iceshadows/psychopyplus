@@ -125,3 +125,4 @@ uninstallFiles.nsi
 /venv*/
 /.venv*/
 !psychopy
+/thirdParty/emg_data.h5
