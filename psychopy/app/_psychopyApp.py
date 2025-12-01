@@ -435,7 +435,7 @@ class PsychoPyApp(wx.App, handlers.ThemeMixin):
             w, h = splashImage.GetSize()
             splash.SetTextPosition((300, h - 30))
             splash.SetText(
-                _translate("Copyright (C) {year} OpenScienceTools.org").format(year=2024))
+                _translate("Copyright (C) {year} Qingdao Dengyun Tech Ltd.").format(year=2025))
         else:
             splash = None
 

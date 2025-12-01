@@ -6035,8 +6035,8 @@ msgstr "&打开 Coder 视图\t"
 
 #: app/_psychopyApp.py:439
 #, python-brace-format
-msgid "Copyright (C) {year} OpenScienceTools.org"
-msgstr "版权 (C) {year} OpenScienceTools.org"
+msgid "Copyright (C) {year} Qingdao Dengyun Tech Ltd."
+msgstr "版权 (C) {year} 登云智上科技有限公司"
 
 #: app/_psychopyApp.py:482
 msgid "Loading app fonts..."
@@ -10437,8 +10437,8 @@ msgstr "要使用多少个校准点"
 #~ msgid "&Open Coder view\t%s"
 #~ msgstr "打开 Coder 视图(&O)\t%s"
 
-#~ msgid "Copyright (C) 2021 OpenScienceTools.org"
-#~ msgstr "Copyright (C) 2021 OpenScienceTools.org"
+#~ msgid "Copyright (C) 2021 wearlab.tech"
+#~ msgstr "Copyright (C) 2021 wearlab.tech"
 
 #~ msgid "edit"
 #~ msgstr "编辑"

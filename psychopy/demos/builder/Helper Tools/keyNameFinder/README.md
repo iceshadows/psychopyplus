@@ -11,4 +11,4 @@ while "escape" not in event.getKeys():
 
 By [Daniel Riggs](mailto:daniel.riggs1@gmail.com), September 2016
 
-Updated by [Todd Parsons](mailto:todd@opensciencetools.org), June 2021
+Updated by [Todd Parsons](mailto:todd@wearlab.tech), June 2021

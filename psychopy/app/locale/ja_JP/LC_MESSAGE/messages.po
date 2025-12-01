@@ -355,8 +355,8 @@ msgstr "アプリケーションを終了します"
 
 #: app/_psychopyApp.py:439
 #, python-brace-format
-msgid "Copyright (C) {year} OpenScienceTools.org"
-msgstr "Copyright (C) {year} OpenScienceTools.org"
+msgid "Copyright (C) {year} Qingdao Dengyun Tech Ltd."
+msgstr "Copyright (C) {year} Qingdao Dengyun Tech Ltd."
 
 #: app/_psychopyApp.py:482
 msgid "Loading app fonts..."
