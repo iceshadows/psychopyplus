@@ -8,7 +8,6 @@
 !define FORMER_PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}3"
 !define PRODUCT_UNINST_ROOT_KEY "SHELL_CONTEXT"
 !define PRODUCT_STARTMENU_REGVAL "NSIS:StartMenuDir"
-
 !addplugindir "nsis_plugins\Plugins"
 !include "fileassoc.nsh"
 ; !include "Library.nsh"  ; for installing avbin

@@ -72,39 +72,43 @@ jobs:
           path: dist/
           retention-days: 30
 
-      - name: Install NSIS (for installer build)
+      - name: Detect Python path (for NSIS)
         if: matrix.python-version == '3.10'
         shell: powershell
         run: |
-          choco install nsis -y
-
+          $pyExe = python -c "import sys; print(sys.executable)"
+          $pyDir = Split-Path $pyExe -Parent
+          echo "PYPATH=$pyDir" >> $env:GITHUB_ENV
+      # 2) 调用 joncloud/makensis-action 构建安装包
       - name: Build NSIS installer (Python 3.10)
         if: matrix.python-version == '3.10'
-        shell: powershell
-        run: |
-          $candidates = @(
-            "${env:ProgramFiles(x86)}\NSIS\Bin\makensis.exe",
-            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
-            "${env:ProgramFiles}\NSIS\Bin\makensis.exe",
-            "${env:ProgramFiles}\NSIS\makensis.exe"
-          )
-          
-          $makensis = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-          
-          if (-not $makensis) {
-            Write-Error "makensis.exe not found. Checked: $($candidates -join ', ')"
-            exit 1
-          }
-          
-          Write-Host "Using makensis at: $makensis"
-          & $makensis /V4 "building/buildCompleteInstaller.nsi"
-
-      # 上传 NSIS 安装包（假设 nsi 生成的 exe 在当前工作目录或特定目录下）
+        uses: joncloud/makensis-action@v5.0
+        env:
+          # 从上一步写入的 PYPATH
+          PYPATH: ${{ env.PYPATH }}
+          # 你可以按需要改这三个变量值
+          PRODUCT_NAME: PsychoPyPlus
+          PRODUCT_VERSION: ${{ github.ref_name }}   # 如 v1.2.3，可改成你自己的版本来源
+          ARCH: x64                                 # 或 ${{ runner.arch }} / ${{ env.PROCESSOR_ARCHITECTURE }}
+        with:
+          # 你的 NSIS 脚本
+          script-file: building/buildCompleteInstaller.nsi
+          # 传给 makensis 的参数，使用 /D 定义 NSIS 变量
+          arguments: >
+            /V4
+            /DPYPATH="${{ env.PYPATH }}"
+            /DPRODUCT_NAME="${{ env.PRODUCT_NAME }}"
+            /DPRODUCT_VERSION="${{ env.PRODUCT_VERSION }}"
+            /DARCH="${{ env.ARCH }}"
+          # 插件目录：假设 nsis-plugins 目录在仓库根目录
+          additional-plugin-paths: |
+            nsis-plugins
       - name: Upload NSIS installer artifact
         if: matrix.python-version == '3.10'
         uses: actions/upload-artifact@v4
         with:
           name: psychopy-installer-win-py310
+          # 按你的 .nsi 脚本实际输出路径调整
           path: |
             **/*.exe
           retention-days: 30
