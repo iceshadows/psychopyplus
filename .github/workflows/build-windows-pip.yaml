@@ -60,6 +60,7 @@ jobs:
 
       - name: Build Language POs
         run: |
+          python -m pip install polib
           python building/compile_po.py
   
 
