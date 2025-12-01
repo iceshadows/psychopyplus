@@ -97,11 +97,11 @@ jobs:
           $pyExe = python -c "import sys; print(sys.executable)"
           $pyDir = Split-Path $pyExe -Parent
           echo "PYPATH=$pyDir" >> $env:GITHUB_ENV
+
       - name: Install NSIS
         run: |
           choco install nsis -y
-        with:
-          cache: true
+
       # 2) 调用 joncloud/makensis-action 构建安装包
       - name: Detect Python path (for NSIS)
         if: matrix.python-version == '3.10'
