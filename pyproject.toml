@@ -96,7 +96,7 @@ dependencies = [
     "moviepy",
     "pyarrow",
     "beautifulsoup4",
-    "wearlab-protocolX @ ./thirdParty/wearlab_protocolX-0.3.2a0-cp310-cp310-win_amd64.whl ; platform_system == \"Windows\" and python_version == \"3.10\"",
+    "wearlab-protocolX @ file://./thirdParty/wearlab_protocolX-0.3.2a0-cp310-cp310-win_amd64.whl ; platform_system == \"Windows\" and python_version == \"3.10\"",
 ]
 
 [project.optional-dependencies]  # This is optional dependencies
