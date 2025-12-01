@@ -98,7 +98,13 @@ jobs:
         if: matrix.python-version == '3.10'
         shell: powershell
         run: |
-          $makensis = (Get-Command makensis.exe).Source
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\NSIS\Bin\makensis.exe",
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+            "${env:ProgramFiles}\NSIS\Bin\makensis.exe",
+            "${env:ProgramFiles}\NSIS\makensis.exe"
+          )
+          $makensis = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
           Write-Host "makensis.exe = $makensis"
           $nsisBin  = Split-Path $makensis -Parent
           $nsisRoot = Split-Path $nsisBin  -Parent
@@ -118,7 +124,14 @@ jobs:
           ARCH: x64
         run: |
           $script = "building\buildCompleteInstaller.nsi"
-          & makensis.exe `
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\NSIS\Bin\makensis.exe",
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+            "${env:ProgramFiles}\NSIS\Bin\makensis.exe",
+            "${env:ProgramFiles}\NSIS\makensis.exe"
+          )
+          $makensis = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          & $makensis `
             /V4 `
             /DPYPATH="${env:PYPATH}" `
             /DPRODUCT_NAME="${env:PRODUCT_NAME}" `
