@@ -72,19 +72,32 @@ jobs:
           path: dist/
           retention-days: 30
 
-      # 仅在 Python 3.10 时安装 NSIS
       - name: Install NSIS (for installer build)
         if: matrix.python-version == '3.10'
+        shell: powershell
         run: |
           choco install nsis -y
-        shell: powershell
 
-      # 仅在 Python 3.10 时调用 NSIS 构建安装包
       - name: Build NSIS installer (Python 3.10)
         if: matrix.python-version == '3.10'
-        run: |
-          makensis /V4 "building/buildCompleteInstaller.nsi"
         shell: powershell
+        run: |
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\NSIS\Bin\makensis.exe",
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+            "${env:ProgramFiles}\NSIS\Bin\makensis.exe",
+            "${env:ProgramFiles}\NSIS\makensis.exe"
+          )
+          
+          $makensis = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          
+          if (-not $makensis) {
+            Write-Error "makensis.exe not found. Checked: $($candidates -join ', ')"
+            exit 1
+          }
+          
+          Write-Host "Using makensis at: $makensis"
+          & $makensis /V4 "building/buildCompleteInstaller.nsi"
 
       # 上传 NSIS 安装包（假设 nsi 生成的 exe 在当前工作目录或特定目录下）
       - name: Upload NSIS installer artifact
