@@ -44,6 +44,12 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel build twine
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          # 让 pip cache 依赖 pyproject
+          cache-dependency-path: |
+            pyproject.toml
 
       - name: Display Python version
         run: python -c "import sys; print(sys.version)"
@@ -52,10 +58,22 @@ jobs:
       - name: Install wearlab_protocolX wheel
         run: |
           pip install thirdParty/wearlab_protocolX-0.3.2a0-cp310-cp310-win_amd64.whl
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          # 让 pip cache 依赖 pyproject
+          cache-dependency-path: |
+            pyproject.toml
 
       - name: Install project dependencies
         run: |
           pip install -e ".[dev]" || pip install -e .
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          # 让 pip cache 依赖 pyproject
+          cache-dependency-path: |
+            pyproject.toml
 
       - name: Build wheel and sdist
         run: |
@@ -82,30 +100,52 @@ jobs:
       - name: Install NSIS
         run: |
           choco install nsis -y
+        with:
+          cache: true
       # 2) 调用 joncloud/makensis-action 构建安装包
+      - name: Detect Python path (for NSIS)
+        if: matrix.python-version == '3.10'
+        shell: powershell
+        run: |
+          $pyExe = python -c "import sys; print(sys.executable)"
+          $pyDir = Split-Path $pyExe -Parent
+          echo "PYPATH=$pyDir" >> $env:GITHUB_ENV
+      # 查找 makensis.exe，复制 EnVar.dll 插件到 NSIS 的 Plugins\x86-unicode
+      - name: Install NSIS EnVar plugin
+        if: matrix.python-version == '3.10'
+        shell: powershell
+        run: |
+          # 找到 makensis.exe 实际路径
+          $makensis = (Get-Command makensis.exe).Source
+          Write-Host "makensis.exe = $makensis"
+          # NSIS 根目录通常是 makensis.exe 上两级
+          $nsisBin  = Split-Path $makensis -Parent
+          $nsisRoot = Split-Path $nsisBin  -Parent
+          Write-Host "NSIS root = $nsisRoot"
+          # 插件目录：Plugins\x86-unicode
+          $pluginDir = Join-Path $nsisRoot "Plugins\x86-unicode"
+          Write-Host "Plugin dir = $pluginDir"
+          New-Item -ItemType Directory -Force -Path $pluginDir | Out-Null
+          # 从仓库中的 nsis-plugins 目录复制 EnVar.dll
+          Copy-Item -Force "nsis-plugins\EnVar.dll" $pluginDir
+        # 直接调用 makensis 构建安装包，传入 PYPATH / PRODUCT_NAME / PRODUCT_VERSION / ARCH
       - name: Build NSIS installer (Python 3.10)
         if: matrix.python-version == '3.10'
-        uses: joncloud/makensis-action@v5.0
+        shell: powershell
         env:
-          # 从上一步写入的 PYPATH
           PYPATH: ${{ env.PYPATH }}
-          # 你可以按需要改这三个变量值
           PRODUCT_NAME: PsychoPyPlus
-          PRODUCT_VERSION: ${{ github.ref_name }}   # 如 v1.2.3，可改成你自己的版本来源
-          ARCH: x64                                 # 或 ${{ runner.arch }} / ${{ env.PROCESSOR_ARCHITECTURE }}
-        with:
-          # 你的 NSIS 脚本
-          script-file: building/buildCompleteInstaller.nsi
-          # 传给 makensis 的参数，使用 /D 定义 NSIS 变量
-          arguments: >
-            /V4
-            /DPYPATH="${{ env.PYPATH }}"
-            /DPRODUCT_NAME="${{ env.PRODUCT_NAME }}"
-            /DPRODUCT_VERSION="${{ env.PRODUCT_VERSION }}"
-            /DARCH="${{ env.ARCH }}"
-          # 插件目录：假设 nsis-plugins 目录在仓库根目录
-          additional-plugin-paths: |
-            nsis-plugins
+          PRODUCT_VERSION: ${{ github.ref_name }}   # 比如 v1.2.3
+          ARCH: x64
+        run: |
+          $script = "building\buildCompleteInstaller.nsi"
+          & makensis.exe `
+            /V4 `
+            /DPYPATH="${env:PYPATH}" `
+            /DPRODUCT_NAME="${env:PRODUCT_NAME}" `
+            /DPRODUCT_VERSION="${env:PRODUCT_VERSION}" `
+            /DARCH="${env:ARCH}" `
+            $script
       - name: Upload NSIS installer artifact
         if: matrix.python-version == '3.10'
         uses: actions/upload-artifact@v4
