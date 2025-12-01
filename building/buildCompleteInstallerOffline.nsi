@@ -6,6 +6,7 @@
 !define ARCH "win64"
 !define PRODUCT_NAME "Wrysyslab"
 !define PRODUCT_VERSION "2026.1"
+!define PYPATH "D:\Program\PsychoPy"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define FORMER_PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}3"
 !define PRODUCT_UNINST_ROOT_KEY "SHELL_CONTEXT"
@@ -19,7 +20,7 @@
 !define MULTIUSER_EXECUTIONLEVEL Highest
 !define MULTIUSER_MUI
 !define MULTIUSER_INSTALLMODE_COMMANDLINE
-!define MULTIUSER_INSTALLMODE_INSTDIR "PsychoPy"
+!define MULTIUSER_INSTALLMODE_INSTDIR "Wrysyslab"
 !if ${ARCH} == "win64"
   !define MULTIUSER_USE_PROGRAMFILES64  ; this is a 64bit app
 !endif

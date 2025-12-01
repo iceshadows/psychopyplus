@@ -57,6 +57,10 @@ jobs:
       - name: Install project dependencies
         run: |
           pip install -e ".[dev]" || pip install -e .
+
+      - name: Build Language POs
+        run: |
+          python building/compile_po.py
   
 
       - name: Build wheel and sdist
@@ -134,9 +138,6 @@ jobs:
           & $makensis `
             /V4 `
             /DPYPATH="${env:PYPATH}" `
-            /DPRODUCT_NAME="${env:PRODUCT_NAME}" `
-            /DPRODUCT_VERSION="${env:PRODUCT_VERSION}" `
-            /DARCH="${env:ARCH}" `
             $script
       - name: Upload NSIS installer artifact
         if: matrix.python-version == '3.10'
