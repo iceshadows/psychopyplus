@@ -9,14 +9,8 @@ This component:
 - Creates and starts a WearLabEMGSession at experiment start.
 - Automatically derives the EMG HDF5 base filename from thisExp.dataFileName.
 - Logs "experiment_start" and "experiment_end" events automatically.
-- Exposes the session instance as a variable with the component's name,
-  so Code components can call:
-
-    myEmgComponent.log_event(globalClock.getTime(), "trial_begin", {...})
-
-To use this component, place this file in a folder which you add to:
-
-    PsychoPy → Preferences → Builder → Components paths
+- Optionally enables a live visualization using a separate Tk window
+  implemented inside WearLabEMGSession.
 """
 from pathlib import Path
 
@@ -32,9 +26,11 @@ class EMGRecorderComponent(BaseComponent):
     targets = ['PsychoPy']
     iconFile = Path(__file__).parent / 'wearlab_semg.png'
     iconSVG = Path(__file__).parent / 'wearlabSemg.svg'
-    tooltip = _translate('EMGRecorder: A component for recording Electromyography '
-                         '(EMG) signals during your experiment\n'
-                         '(requires WearLab™️ EMG hardware and drivers)')
+    tooltip = _translate(
+        'EMGRecorder: A component for recording Electromyography '
+        '(EMG) signals during your experiment\n'
+        '(requires WearLab™️ EMG hardware and drivers)'
+    )
 
     def __init__(self, exp, parentName, name="emgRecorder"):
         """
@@ -52,9 +48,6 @@ class EMGRecorderComponent(BaseComponent):
         # Type used internally by PsychoPy
         self.type = "EMGRecorder"
         self.url = "https://example.com/wearlab-emg-psychopy"
-
-        # This component does not draw stimuli, so start/stop time are mostly
-        # irrelevant, but we keep default timing params for consistency.
 
         # ------------------------------------------------------------------ #
         # Custom Builder parameters (dialog fields)
@@ -93,8 +86,20 @@ class EMGRecorderComponent(BaseComponent):
             label=_translate("File suffix"),
         )
 
+        # Enable live visualization (Tk window)
+        self.params["enableVisualization"] = Param(
+            False,
+            valType="bool",
+            allowedTypes=[],
+            hint=_translate(
+                "If checked, a separate Tk window will show live EMG "
+                "waveforms for all channels (handled by WearLabEMGSession)."
+            ),
+            label=_translate("Enable visualization"),
+        )
+
         # Extend the order so these appear near the top of the dialog
-        self.order += ["samplePeriodMs", "nChannels", "fileSuffix"]
+        self.order += ["samplePeriodMs", "nChannels", "fileSuffix", "enableVisualization"]
 
     # ------------------------------------------------------------------ #
     # Code generation helpers
@@ -103,33 +108,70 @@ class EMGRecorderComponent(BaseComponent):
     def writeInitCode(self, buff):
         """
         Called by PsychoPy when generating the script, to write code which
-        should run at the beginning of the experiment.
+        should run at the beginning of the experiment (after the Window is
+        created, before any Routine starts).
         """
         name = self.params["name"].val
         period = self.params["samplePeriodMs"].val
         n_channels = self.params["nChannels"].val
         suffix = self.params["fileSuffix"].val
+        enable_viz = self.params["enableVisualization"].val
 
-        # Note: `thisExp` and `globalClock` are part of the standard
-        # PsychoPy generated script environment.
         code = f"""
 # Initialize WearLab EMG recording session for component '{name}'
 from psychopy.hardware.wearlab_emg import WearLabEMGSession
+
+# Resolve visualization flag directly from the Builder parameter
+{name}_enableViz = bool({enable_viz})
 
 {name}_fileBase = thisExp.dataFileName + {suffix}
 {name} = WearLabEMGSession(
     base_filename={name}_fileBase,
     semg_cycle_ms={period},
-    channels=int({n_channels})
+    channels=int({n_channels}),
+    enable_live_buffer={name}_enableViz,
+    live_buffer_window_size=1000,
 )
 {name}.start()
 
 # Log experiment_start event into EMG HDF5
+# Note: globalClock may not be defined yet at this stage in the script,
+# so we use 0.0 as the origin for the experiment_start event in the EMG file.
 {name}.log_event(
     time_sec=0.0,
     name="experiment_start",
     info={{"component": "{name}", "routine": "{self.parentName}"}}
 )
+"""
+        buff.writeIndentedLines(code)
+
+    def writeRoutineEachFrameCode(self, buff):
+        """
+        Called once per frame during the parent Routine.
+
+        In this version, there is no need for per-frame visualization code,
+        because live plotting is handled entirely inside WearLabEMGSession
+        using a separate Tk window.
+        """
+        name = self.params["name"].val
+
+        code = f"""
+# EMGRecorderComponent '{name}' does not require per-frame code.
+# Live visualization (if enabled) is handled by WearLabEMGSession via a Tk window.
+"""
+        buff.writeIndentedLines(code)
+
+    def writeRoutineEndCode(self, buff):
+        """
+        Called when the parent Routine ends.
+
+        No additional cleanup is needed here because the EMG session
+        continues across routines and is only stopped at experiment end.
+        """
+        name = self.params["name"].val
+
+        code = f"""
+# No per-Routine cleanup required for EMGRecorderComponent '{name}'.
 """
         buff.writeIndentedLines(code)
 

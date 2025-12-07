@@ -4,25 +4,39 @@
 """
 Session management for WearLab EMG recording in PsychoPy.
 
-This module contains three main classes:
+This module contains:
+
+- EMGLivePlotBuffer
+    Thread-safe circular buffer for live visualization.
+
+- EMGLivePlotTkWindow
+    Tk-based live visualization window for EMG data.
 
 - EMGHDF5Recorder
     Handles writing EMG samples, timestamps, device info and events to HDF5.
 
 - EMGDataHandler
-    Receives parsed WearLab protocol packets and forwards them to recorders.
+    Receives parsed WearLab protocol packets and forwards them to recorders
+    and (optionally) to the live buffer.
 
 - WearLabEMGSession
     High-level controller used by PsychoPy-generated scripts. It:
     - starts DeviceCommunication
     - wires callbacks
-    - exposes a log_event(...) method to record PsychoPy events.
+    - exposes a log_event(...) method to record PsychoPy events
+    - optionally opens a separate Tk window for EMG live visualization.
 """
+
 import os
 import time
+import math
+import colorsys
 import logging
+import threading
 from collections import deque
-from typing import Dict, Optional, Deque, Any
+from typing import Dict, Optional, Deque, Any, List
+
+import tkinter as tk
 
 import h5py
 import numpy as np
@@ -37,6 +51,342 @@ from wearlab_protocolX.wearlab_device import DeviceCommunication, WearLabDevice
 
 logger = logging.getLogger(__name__)
 
+
+# --------------------------------------------------------------------------- #
+# Live buffer for visualization
+# --------------------------------------------------------------------------- #
+
+class EMGLivePlotBuffer:
+    """Thread-safe circular buffer for EMG live preview."""
+
+    def __init__(self, channels: int, window_size: int = 1000) -> None:
+        """
+        Parameters
+        ----------
+        channels : int
+            Number of channels per EMG frame.
+        window_size : int
+            Maximum number of time points kept in the buffer.
+        """
+        self.channels = channels
+        self.window_size = window_size
+        self.buffer = np.zeros((window_size, channels), dtype=np.float32)
+        self.index = 0
+        self.length = 0
+        self._lock = threading.Lock()
+
+    def append(self, emg_frame: np.ndarray) -> None:
+        """
+        Append a new EMG frame to the circular buffer.
+
+        Parameters
+        ----------
+        emg_frame : np.ndarray
+            Shape (channels,). Frames with mismatched shape are ignored.
+        """
+        if emg_frame.shape[0] != self.channels:
+            return
+        with self._lock:
+            self.buffer[self.index] = emg_frame
+            self.index = (self.index + 1) % self.window_size
+            self.length = min(self.length + 1, self.window_size)
+
+    def get_window(self) -> Optional[np.ndarray]:
+        """
+        Return data in temporal order: shape (L, channels), L <= window_size.
+
+        Returns
+        -------
+        np.ndarray or None
+            Copy of the live window, or None if buffer is empty.
+        """
+        with self._lock:
+            if self.length == 0:
+                return None
+            if self.length < self.window_size:
+                return self.buffer[: self.length].copy()
+            # Unroll the circular buffer
+            idx = self.index
+            return np.vstack((self.buffer[idx:], self.buffer[:idx])).copy()
+
+
+# --------------------------------------------------------------------------- #
+# Tk live visualization window (multi-channel, vertically separated)
+# --------------------------------------------------------------------------- #
+
+class EMGLivePlotTkWindow(threading.Thread):
+    """
+    Tk-based EMG live preview window.
+
+    This window runs in its own thread and periodically pulls a snapshot
+    from EMGLivePlotBuffer to draw multi-channel waveforms.
+
+    Visualization style:
+    - Each channel is drawn in its own horizontal "track", vertically stacked.
+    - Tracks are evenly distributed from top to bottom with small margins.
+    - Each channel has its own color (HSV wheel).
+    - Vertical scale can be adjusted via Up/Down keys.
+
+    Performance notes:
+    - Only the last `max_points` samples are drawn.
+    - All channels share the same X coordinates.
+    """
+
+    def __init__(
+        self,
+        live_buffer: EMGLivePlotBuffer,
+        update_interval_ms: int = 50,
+        max_points: int = 800,
+        title: str = "WearLab EMG Live",
+        line_width: int = 1,
+        channels_to_show: Optional[List[int]] = None,
+    ) -> None:
+        super().__init__(daemon=True)
+        self.live_buffer = live_buffer
+        self.update_interval_ms = update_interval_ms
+        self.max_points = max_points
+        self.title = title
+        self.line_width = line_width
+
+        # Which channels to display. If None, display all.
+        if channels_to_show is None:
+            channels_to_show = list(range(self.live_buffer.channels))
+        self.channels_to_show = channels_to_show
+
+        self._running = threading.Event()
+        self._running.set()
+
+        self.root: Optional[tk.Tk] = None
+        self.canvas: Optional[tk.Canvas] = None
+        self.width = 1000
+        self.height = 600
+
+        # Global vertical scaling and offset (applied to all channels)
+        self.y_scale = 1.0
+        self.y_offset = 0.0
+
+        # Pre-generate one color per channel to show
+        self.channel_colors = self._generate_channel_colors(len(self.channels_to_show))
+
+    def _generate_channel_colors(self, n_channels: int) -> list[str]:
+        """
+        Generate a distinct RGB color (in hex string) for each channel
+        by evenly sampling the HSV color wheel.
+        """
+        colors: list[str] = []
+        if n_channels <= 0:
+            return ["#00FF00"]
+        for i in range(n_channels):
+            h = float(i) / float(n_channels)
+            s = 0.8
+            v = 0.9
+            r, g, b = colorsys.hsv_to_rgb(h, s, v)
+            colors.append("#%02x%02x%02x" % (int(r * 255), int(g * 255), int(b * 255)))
+        return colors
+
+    # ------------------------------ #
+    # Thread entry
+    # ------------------------------ #
+
+    def run(self) -> None:
+        """Thread entry: create Tk root and start main loop."""
+        self.root = tk.Tk()
+        self.root.title(self.title)
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        self.canvas = tk.Canvas(
+            self.root,
+            width=self.width,
+            height=self.height,
+            bg="black",
+            highlightthickness=0,
+        )
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+
+        # Update stored width/height when the window is resized
+        self.canvas.bind("<Configure>", self._on_resize)
+
+        # Bind keys for vertical scaling
+        self.root.bind("<Up>", self._on_key_up)
+        self.root.bind("<Down>", self._on_key_down)
+
+        # Start periodic updates
+        self._schedule_update()
+
+        self.root.mainloop()
+
+    def _on_resize(self, event: tk.Event) -> None:
+        """Update internal width/height when the canvas is resized."""
+        self.width = max(100, int(event.width))
+        self.height = max(100, int(event.height))
+
+    def _on_close(self) -> None:
+        """
+        Callback when user closes the window.
+
+        This will stop the update loop and destroy the Tk root.
+        """
+        self._running.clear()
+        if self.root is not None:
+            self.root.after(0, self.root.destroy)
+
+    def _on_key_up(self, event: tk.Event) -> None:
+        """Increase global vertical scale."""
+        self.y_scale *= 1.2
+
+    def _on_key_down(self, event: tk.Event) -> None:
+        """Decrease global vertical scale (with lower bound)."""
+        self.y_scale /= 1.2
+        if self.y_scale < 0.1:
+            self.y_scale = 0.1
+
+    # ------------------------------ #
+    # External stop API
+    # ------------------------------ #
+
+    def stop(self) -> None:
+        """
+        Request the live window to stop and close.
+
+        Safe to call multiple times and from other threads.
+        """
+        self._running.clear()
+        if self.root is not None:
+            try:
+                self.root.after(0, self.root.destroy)
+            except Exception:
+                # Window might already be closed
+                pass
+
+    # ------------------------------ #
+    # Drawing logic
+    # ------------------------------ #
+
+    def _schedule_update(self) -> None:
+        """Schedule the next update if still running."""
+        if self.root is None:
+            return
+        if not self._running.is_set():
+            return
+        self._update_plot()
+        self.root.after(self.update_interval_ms, self._schedule_update)
+
+    def _update_plot(self) -> None:
+        """
+        Fetch latest window from buffer and redraw.
+
+        Only the last `max_points` samples are used to limit the workload.
+        """
+        if self.canvas is None:
+            return
+
+        window = self.live_buffer.get_window()
+        if window is None or window.shape[0] < 2:
+            # No data: clear canvas
+            self.canvas.delete("emg")
+            return
+
+        # Use only the last max_points samples for performance
+        num_samples = window.shape[0]
+        if num_samples > self.max_points:
+            step = math.ceil(num_samples / self.max_points)
+            window = window[::step, :]
+
+        # Ensure at least 2 points remain
+        if window.shape[0] < 2:
+            self.canvas.delete("emg")
+            return
+
+        self._draw_waveforms(window)
+
+    def _draw_waveforms(self, window: np.ndarray) -> None:
+        """
+        Draw multi-channel EMG waveforms with vertical separation.
+
+        Each channel is drawn in its own horizontal band.
+
+        Parameters
+        ----------
+        window : np.ndarray
+            Shape (L, C) where L is time and C is channels.
+        """
+        if self.canvas is None:
+            return
+
+        self.canvas.delete("emg")
+
+        num_points, num_channels = window.shape
+        if num_points < 2 or num_channels == 0:
+            return
+
+        w = float(self.width)
+        h = float(self.height)
+
+        # Current canvas size may be zero before first layout
+        if w <= 1.0 or h <= 1.0:
+            return
+
+        # Margins at top and bottom
+        margin_top = h * 0.05
+        margin_bottom = h * 0.05
+        available_h = h - margin_top - margin_bottom
+        if available_h <= 0:
+            return
+
+        # Determine how many channels we actually show
+        ch_indices = [ch for ch in self.channels_to_show if ch < num_channels]
+        ch_count = len(ch_indices)
+        if ch_count == 0:
+            return
+
+        # Height per channel track
+        per_ch_height = available_h / float(ch_count)
+
+        # Pre-compute X coordinates (shared by all channels)
+        # X goes from 0 to w with num_points samples
+        xs = np.linspace(0.0, w, num_points, dtype=np.float32)
+
+        # Draw each channel in its own track
+        for idx, ch in enumerate(ch_indices):
+            ch_data = window[:, ch]
+
+            # Auto-range for this channel
+            dmin = float(np.min(ch_data))
+            dmax = float(np.max(ch_data))
+            if dmax == dmin:
+                dmax = dmin + 1.0
+
+            # Center line for this channel's track
+            center_line = margin_top + per_ch_height * (idx + 0.5)
+
+            # Map dmin..dmax into 80% of track height
+            scale = (per_ch_height * 0.4 / (dmax - dmin)) * self.y_scale
+
+            # Midpoint of the data range
+            mid = 0.5 * (dmin + dmax)
+
+            # Compute Y coordinates: center_line - (value - mid) * scale
+            ys = center_line - (ch_data - mid) * scale + self.y_offset
+
+            # Interleave X/Y into a flat list
+            points: List[float] = []
+            for x, y in zip(xs, ys):
+                points.append(float(x))
+                points.append(float(y))
+
+            color = self.channel_colors[idx % len(self.channel_colors)]
+            self.canvas.create_line(
+                *points,
+                fill=color,
+                width=self.line_width,
+                tags="emg",
+                smooth=False,
+            )
+
+
+# --------------------------------------------------------------------------- #
+# HDF5 recorder
+# --------------------------------------------------------------------------- #
 
 class EMGHDF5Recorder:
     """Recorder that writes EMG data and events for a single device into HDF5."""
@@ -87,10 +437,11 @@ class EMGHDF5Recorder:
             return
 
         try:
-            # Ensure that the parent directory exists (e.g. "data/...")
+            # Ensure the parent directory exists, e.g. "data/..."
             dir_path = os.path.dirname(self.filename)
             if dir_path and not os.path.exists(dir_path):
                 os.makedirs(dir_path, exist_ok=True)
+
             # Open in append mode so multiple runs or devices can share a file
             self.file_handle = h5py.File(self.filename, "a")
 
@@ -288,20 +639,27 @@ class EMGHDF5Recorder:
             self.log.error("Failed to flush event buffer: %s", exc)
 
 
+# --------------------------------------------------------------------------- #
+# Handler
+# --------------------------------------------------------------------------- #
+
 class EMGDataHandler:
     """Handle WearLab protocol packets and dispatch them to HDF5 recorders."""
 
-    def __init__(self, base_filename: str) -> None:
+    def __init__(self, base_filename: str, live_buffer: Optional[EMGLivePlotBuffer] = None) -> None:
         """
         Parameters
         ----------
         base_filename : str
             Base filename (without extension). The final HDF5 filename is
             `base_filename + ".h5"`.
+        live_buffer : EMGLivePlotBuffer, optional
+            Optional buffer for live visualization.
         """
         self.base_filename = base_filename
         self.recorders: Dict[str, EMGHDF5Recorder] = {}
         self.device_info: Dict[str, dict] = {}
+        self.live_buffer = live_buffer
         self.log = logging.getLogger(f"{__name__}.EMGDataHandler")
 
     # ------------------------------------------------------------------ #
@@ -321,6 +679,14 @@ class EMGDataHandler:
     def _handle_emg_data(self, emg_packet: EmgDataPacket) -> None:
         """Handle EMG data packets."""
         device_id = emg_packet.hardware_identifier
+
+        # Feed live buffer (if enabled)
+        if self.live_buffer is not None:
+            try:
+                arr = np.asarray(emg_packet.emg_data, dtype=np.float32)
+                self.live_buffer.append(arr)
+            except Exception as exc:  # noqa: BLE001
+                self.log.error("Error appending to live buffer: %s", exc)
 
         # Lazily create recorder for each device
         if device_id not in self.recorders:
@@ -369,6 +735,10 @@ class EMGDataHandler:
         self.log.info("All recorders stopped.")
 
 
+# --------------------------------------------------------------------------- #
+# High-level session
+# --------------------------------------------------------------------------- #
+
 class WearLabEMGSession:
     """
     High-level controller used by PsychoPy scripts via the Builder component.
@@ -381,6 +751,7 @@ class WearLabEMGSession:
             target_pid=0x5740,
             semg_cycle_ms=1000,
             channels=64,
+            enable_live_buffer=True,
         )
         emgRecorder.start()
         ...
@@ -396,6 +767,8 @@ class WearLabEMGSession:
         target_pid: int = 0x5740,
         semg_cycle_ms: int = 1000,
         channels: int = 64,
+        enable_live_buffer: bool = False,
+        live_buffer_window_size: int = 1000,
     ) -> None:
         """
         Parameters
@@ -410,6 +783,10 @@ class WearLabEMGSession:
             Sampling period value passed to the device (unit depends on firmware).
         channels : int
             Expected number of EMG channels (used mainly for info/logging).
+        enable_live_buffer : bool
+            Whether to enable the internal live buffer for visualization.
+        live_buffer_window_size : int
+            Number of time points kept in the live buffer.
         """
         self.base_filename = base_filename
         self.target_vid = target_vid
@@ -421,6 +798,11 @@ class WearLabEMGSession:
         self.device_comm: Optional[DeviceCommunication] = None
         self.emg_handler: Optional[EMGDataHandler] = None
         self._running: bool = False
+
+        self.enable_live_buffer = enable_live_buffer
+        self.live_buffer_window_size = live_buffer_window_size
+        self.live_buffer: Optional[EMGLivePlotBuffer] = None
+        self.live_window_thread: Optional[EMGLivePlotTkWindow] = None
 
         self.log = logging.getLogger(f"{__name__}.WearLabEMGSession")
 
@@ -476,13 +858,31 @@ class WearLabEMGSession:
             return
 
         self.log.info("Starting WearLab EMG session with base filename '%s'", self.base_filename)
-        import os, h5py
-        dir_path = os.path.dirname(self.base_filename)
-        if dir_path and not os.path.exists(dir_path):
-            os.makedirs(dir_path, exist_ok=True)
-        with h5py.File(self.base_filename + ".h5", "a"):
-            pass
-        self.emg_handler = EMGDataHandler(self.base_filename)
+
+        # Prepare live buffer and Tk visualization window if requested
+        if self.enable_live_buffer:
+            self.live_buffer = EMGLivePlotBuffer(
+                channels=self.channels,
+                window_size=self.live_buffer_window_size,
+            )
+            try:
+                self.live_window_thread = EMGLivePlotTkWindow(
+                    live_buffer=self.live_buffer,
+                    title=f"WearLab EMG Live ({os.path.basename(self.base_filename)})",
+                    update_interval_ms=50,
+                    max_points=800,
+                    line_width=1,
+                    channels_to_show=None,  # None -> show all channels
+                )
+                self.live_window_thread.start()
+            except Exception as exc:  # noqa: BLE001
+                self.log.error("Failed to start Tk live window: %s", exc)
+                self.live_window_thread = None
+        else:
+            self.live_buffer = None
+            self.live_window_thread = None
+
+        self.emg_handler = EMGDataHandler(self.base_filename, live_buffer=self.live_buffer)
         self.device_comm = DeviceCommunication(
             target_vid=self.target_vid,
             target_pid=self.target_pid,
@@ -507,6 +907,14 @@ class WearLabEMGSession:
 
         if self.device_comm is not None:
             self.device_comm.stop_communication()
+
+        # Stop Tk live window if running
+        if self.live_window_thread is not None:
+            try:
+                self.live_window_thread.stop()
+            except Exception as exc:  # noqa: BLE001
+                self.log.error("Error stopping live window thread: %s", exc)
+            self.live_window_thread = None
 
         self._running = False
 
@@ -537,3 +945,17 @@ class WearLabEMGSession:
 
         info_json = json.dumps(info, ensure_ascii=False)
         self.emg_handler.log_event_for_all_devices(time_sec, name, info_json)
+
+    # ------------------------------------------------------------------ #
+    # Live buffer access
+    # ------------------------------------------------------------------ #
+
+    def get_live_window(self) -> Optional[np.ndarray]:
+        """
+        Return a copy of the current live window, or None if disabled or empty.
+
+        This is intended for visualization only, not for analysis.
+        """
+        if self.live_buffer is None:
+            return None
+        return self.live_buffer.get_window()
