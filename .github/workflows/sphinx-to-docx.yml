@@ -1,7 +1,6 @@
 name: Sphinx to Docx (Specific Chapter)
 
 on:
-  # 允许手动触发，并输入要编译的章节
   workflow_dispatch:
     inputs:
       chapter_name:
@@ -29,23 +28,29 @@ jobs:
         with:
           python-version: '3.10'
 
-      # 3. 安装 Pandoc (核心转换工具)
+      # 3. 安装 Pandoc (系统级依赖)
       - name: Install Pandoc
         run: |
           sudo apt-get update
           sudo apt-get install -y pandoc
 
-      # 4. 安装 Python 依赖
+      # 4. 安装 Python 依赖 (修复了 sphinx_design 报错)
       - name: Install Sphinx dependencies
         run: |
+          python -m pip install --upgrade pip
+          
+          # 1. 安装报错中缺失的库
+          pip install sphinx-design
+          
+          # 2. 尝试安装项目自带的 requirements.txt
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f ${{ inputs.source_dir }}/requirements.txt ]; then pip install -r ${{ inputs.source_dir }}/requirements.txt; fi
-          # 确保安装了 sphinx
-          pip install sphinx
+          
+          # 3. 兜底安装：确保 sphinx 和常用主题存在
+          pip install sphinx sphinx_rtd_theme
 
-      # 5. 编译 HTML (关键步骤)
-      # -b singlehtml: 生成单页 HTML (适合转 Word)
-      # -D master_doc=...: 动态修改入口文件，从而只编译指定章节
+      # 5. 编译 HTML
+      # 使用 singlehtml 模式，并通过 -D master_doc 修改入口
       - name: Build SingleHTML with Sphinx
         run: |
           echo "Building chapter: ${{ inputs.chapter_name }}"
@@ -58,18 +63,23 @@ jobs:
       - name: Convert HTML to Docx
         run: |
           cd build_output
-          # singlehtml 模式下，输出文件通常固定为 index.html (即便 master_doc 变了)
-          # 我们将其转换为以章节名命名的 docx
+          # singlehtml 的输出文件固定为 index.html
+          # 转换时引用上一级目录可能的 reference.docx
           pandoc index.html -o ../${{ inputs.chapter_name }}.docx \
-            --reference-doc=../reference.docx || echo "No reference doc found, using default styles"
-            
-          # 注意：如果你有自定义样式的 reference.docx，放在仓库根目录即可生效
-          # 如果没有，Pandoc 会使用默认样式，上面命令里的 || echo ... 保证不会报错
+            --reference-doc=../reference.docx || echo "No custom reference doc found, using default."
 
-      # 7. 上传生成的 Docx 文件
+      # 7. 上传 Docx 文件
       - name: Upload Docx Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: docx-output-${{ github.run_id }}
+          name: docx-${{ inputs.chapter_name }}
           path: ${{ inputs.chapter_name }}.docx
           if-no-files-found: error
+
+      # 8. 上传 HTML 文件夹 (新增需求)
+      # 上传整个 build_output 目录，确保图片和 CSS 样式都包含在内
+      - name: Upload HTML Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: html-${{ inputs.chapter_name }}
+          path: build_output/

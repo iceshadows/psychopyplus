@@ -14,8 +14,7 @@ on:
     tags:
       - 'v*'
     branches:
-      - main
-      - dev
+      - release
 
 permissions:
   contents: read
