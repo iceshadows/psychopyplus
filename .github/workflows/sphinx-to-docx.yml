@@ -1,4 +1,4 @@
-name: Sphinx to Docx (Full Extensions)
+name: Sphinx to Docx (Fixed Imports)
 
 on:
   workflow_dispatch:
@@ -6,15 +6,15 @@ on:
       chapter_name:
         description: '要编译的章节文件名 (相对于 source 目录，不带后缀)'
         required: true
-        default: 'index'
+        default: 'api'  # 你刚才测试的是 api
         type: string
       source_dir:
         description: 'Sphinx source 目录路径'
         required: true
-        default: 'docs'
+        default: 'docs/source'
 
 jobs:
-  build:
+  build-doc:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,44 +28,47 @@ jobs:
         with:
           python-version: '3.10'
 
-      # 3. 安装系统级依赖 (Pandoc 和 Inkscape)
-      # Inkscape 是 sphinxcontrib.inkscapeconverter 必需的
+      # 3. 安装系统依赖 (Pandoc & Inkscape)
       - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y pandoc inkscape
 
-      # 4. 安装 Python 扩展包
-      # 对应你 conf.py 中的 extensions 列表
+      # 4. 安装 Sphinx 及相关扩展
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
           
-          # === 核心依赖 ===
+          # 核心与主题
           pip install sphinx sphinx_rtd_theme
           
-          # === 扩展对应的 PyPI 包 ===
-          # sphinx.ext.* 是内置的，不需要安装
-          # sphinx_design
-          pip install sphinx-design
-          # sphinx_copybutton
-          pip install sphinx-copybutton
-          # myst_parser
-          pip install myst-parser
-          # sphinxcontrib.inkscapeconverter
-          pip install sphinxcontrib-svg2pdfconverter
+          # 扩展列表中的包
+          pip install sphinx-design sphinx-copybutton myst-parser sphinxcontrib-svg2pdfconverter
           
-          # === 关于 redirect ===
-          # 如果 'redirect' 是第三方包 (sphinx-reredirects)，请取消下面注释:
-          # pip install sphinx-reredirects
-          # 如果 'redirect' 是你本地写在 _ext 里的 py 文件，则不需要 pip install
-          
-          # === 加载项目自身的 requirements.txt (防止遗漏) ===
+          # 如果你的项目里有 requirements.txt，尝试安装
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f ${{ inputs.source_dir }}/requirements.txt ]; then pip install -r ${{ inputs.source_dir }}/requirements.txt; fi
 
-      # 5. 编译 HTML (SingleHTML)
-      # -D master_doc=... 强制指定编译入口，实现“只编译子章节”
+      # =========================================================
+      # 5. [关键步骤] 动态修改 conf.py 以跳过 import 错误
+      # =========================================================
+      - name: Patch conf.py to Mock Imports
+        run: |
+          CONF_PATH="${{ inputs.source_dir }}/conf.py"
+          
+          echo "" >> $CONF_PATH
+          echo "# ================= CI AUTO PATCH =================" >> $CONF_PATH
+          echo "# 告诉 autodoc 不要真去 import 这些复杂的科学计算库" >> $CONF_PATH
+          echo "autodoc_mock_imports = [" >> $CONF_PATH
+          echo "    'psychopy', 'numpy', 'scipy', 'pandas', 'matplotlib', " >> $CONF_PATH
+          echo "    'wx', 'pyglet', 'pygame', 'PIL', 'openpyxl', " >> $CONF_PATH
+          echo "    'soundfile', 'serial', 'json_tricks', 'questplus'" >> $CONF_PATH
+          echo "]" >> $CONF_PATH
+          
+          echo "Patched conf.py content (tail):"
+          tail -n 10 $CONF_PATH
+
+      # 6. 编译 HTML (SingleHTML)
       - name: Build SingleHTML
         run: |
           echo "Building chapter: ${{ inputs.chapter_name }}"
@@ -74,20 +77,19 @@ jobs:
             ${{ inputs.source_dir }} \
             build_output
 
-      # 6. HTML 转 Docx (Pandoc)
+      # 7. HTML 转 Docx
       - name: Convert to Docx
         run: |
           cd build_output
-          # 检查是否有自定义样式文件，否则用默认
           REFERENCE_DOC=""
           if [ -f "../reference.docx" ]; then
             REFERENCE_DOC="--reference-doc=../reference.docx"
-            echo "Using custom reference doc."
           fi
           
-          pandoc index.html -o ../${{ inputs.chapter_name }}.docx $REFERENCE_DOC
+          # 忽略上一级可能的引用错误
+          pandoc index.html -o ../${{ inputs.chapter_name }}.docx $REFERENCE_DOC || echo "Conversion warning ignored"
 
-      # 7. 上传 Docx 文件
+      # 8. 上传 Docx
       - name: Upload Docx Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -95,7 +97,7 @@ jobs:
           path: ${{ inputs.chapter_name }}.docx
           if-no-files-found: error
 
-      # 8. 上传 HTML 文件夹 (包含图片和样式)
+      # 9. 上传 HTML 文件夹
       - name: Upload HTML Artifact
         uses: actions/upload-artifact@v4
         with:
