@@ -53,11 +53,24 @@ class EMGRecorderComponent(BaseComponent):
         # Custom Builder parameters (dialog fields)
         # ------------------------------------------------------------------ #
 
+        # TS
+        self.params["Brand"] = Param(
+            "WearLab",
+            valType="string",
+            inputType="choice",
+            allowedVals=['WearLab'],
+            hint=_translate(
+                "Brand or Protocol for the device"
+            ),
+            label=_translate("Brand"),
+        )
+
         # Sampling period sent to the device firmware (ms)
         self.params["samplePeriodMs"] = Param(
             "1000",
             valType="code",
-            allowedTypes=[],
+            inputType="choice",
+            allowedVals=['250', '500', '1000', '2000', '4000'],
             hint=_translate(
                 "Sampling period in milliseconds passed to the device "
                 "(e.g. 1000 = 1000 ms, 1 = 1 ms, depending on firmware semantics)."
@@ -66,13 +79,20 @@ class EMGRecorderComponent(BaseComponent):
         )
 
         # Number of EMG channels
-        self.params["nChannels"] = Param(
-            "16",
-            valType="code",
-            allowedTypes=[],
-            hint=_translate("Number of EMG channels."),
-            label=_translate("Channels"),
-        )
+        self.params['nChannels'] = Param("16",
+                                         valType="code", inputType="choice",
+                                         allowedVals=['64', '16', '32', '8'],
+                                         hint=_translate("Number of EMG channels."),
+                                         label=_translate("Channels")
+                                         )
+
+        # PGA
+        self.params['pga'] = Param("1",
+                                   valType="code", inputType="choice",
+                                   allowedVals=['1', '2', '4', '8', '12', '24'],
+                                   hint=_translate("PGA"),
+                                   label=_translate("PGA")
+                                   )
 
         # Filename suffix appended to thisExp.dataFileName
         self.params["fileSuffix"] = Param(
@@ -99,7 +119,7 @@ class EMGRecorderComponent(BaseComponent):
         )
 
         # Extend the order so these appear near the top of the dialog
-        self.order += ["samplePeriodMs", "nChannels", "fileSuffix", "enableVisualization"]
+        self.order += ["samplePeriodMs", "nChannels","pga", "fileSuffix", "enableVisualization"]
 
     # ------------------------------------------------------------------ #
     # Code generation helpers
