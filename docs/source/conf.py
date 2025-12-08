@@ -141,7 +141,7 @@ napoleon_include_special_with_doc = False
 
 # The theme to use for HTML and HTML Help pages.  Major themes that come with
 # Sphinx are currently 'default' and 'sphinxdoc'.
-html_theme = 'psychopy'
+html_theme = 'default'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -158,7 +158,7 @@ html_theme_options = {
 html_title = "%s v%s" %(project, release)
 
 # A shorter title for the navigation bar.  Default is the same as html_title.
-html_short_title = "PsychoPy"
+html_short_title = "WrysysLab Studio"
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
