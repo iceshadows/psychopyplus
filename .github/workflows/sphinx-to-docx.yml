@@ -1,4 +1,4 @@
-name: Sphinx to Docx (Specific Chapter)
+name: Sphinx to Docx (Full Extensions)
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
         default: 'docs'
 
 jobs:
-  build_docx:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,30 +28,45 @@ jobs:
         with:
           python-version: '3.10'
 
-      # 3. 安装 Pandoc (系统级依赖)
-      - name: Install Pandoc
+      # 3. 安装系统级依赖 (Pandoc 和 Inkscape)
+      # Inkscape 是 sphinxcontrib.inkscapeconverter 必需的
+      - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pandoc
+          sudo apt-get install -y pandoc inkscape
 
-      # 4. 安装 Python 依赖 (修复了 sphinx_design 报错)
-      - name: Install Sphinx dependencies
+      # 4. 安装 Python 扩展包
+      # 对应你 conf.py 中的 extensions 列表
+      - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
           
-          # 1. 安装报错中缺失的库
-          pip install sphinx-design
+          # === 核心依赖 ===
+          pip install sphinx sphinx_rtd_theme
           
-          # 2. 尝试安装项目自带的 requirements.txt
+          # === 扩展对应的 PyPI 包 ===
+          # sphinx.ext.* 是内置的，不需要安装
+          # sphinx_design
+          pip install sphinx-design
+          # sphinx_copybutton
+          pip install sphinx-copybutton
+          # myst_parser
+          pip install myst-parser
+          # sphinxcontrib.inkscapeconverter
+          pip install sphinxcontrib-svg2pdfconverter
+          
+          # === 关于 redirect ===
+          # 如果 'redirect' 是第三方包 (sphinx-reredirects)，请取消下面注释:
+          # pip install sphinx-reredirects
+          # 如果 'redirect' 是你本地写在 _ext 里的 py 文件，则不需要 pip install
+          
+          # === 加载项目自身的 requirements.txt (防止遗漏) ===
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f ${{ inputs.source_dir }}/requirements.txt ]; then pip install -r ${{ inputs.source_dir }}/requirements.txt; fi
-          
-          # 3. 兜底安装：确保 sphinx 和常用主题存在
-          pip install sphinx sphinx_rtd_theme
 
-      # 5. 编译 HTML
-      # 使用 singlehtml 模式，并通过 -D master_doc 修改入口
-      - name: Build SingleHTML with Sphinx
+      # 5. 编译 HTML (SingleHTML)
+      # -D master_doc=... 强制指定编译入口，实现“只编译子章节”
+      - name: Build SingleHTML
         run: |
           echo "Building chapter: ${{ inputs.chapter_name }}"
           sphinx-build -b singlehtml \
@@ -59,14 +74,18 @@ jobs:
             ${{ inputs.source_dir }} \
             build_output
 
-      # 6. 使用 Pandoc 将 HTML 转为 Docx
-      - name: Convert HTML to Docx
+      # 6. HTML 转 Docx (Pandoc)
+      - name: Convert to Docx
         run: |
           cd build_output
-          # singlehtml 的输出文件固定为 index.html
-          # 转换时引用上一级目录可能的 reference.docx
-          pandoc index.html -o ../${{ inputs.chapter_name }}.docx \
-            --reference-doc=../reference.docx || echo "No custom reference doc found, using default."
+          # 检查是否有自定义样式文件，否则用默认
+          REFERENCE_DOC=""
+          if [ -f "../reference.docx" ]; then
+            REFERENCE_DOC="--reference-doc=../reference.docx"
+            echo "Using custom reference doc."
+          fi
+          
+          pandoc index.html -o ../${{ inputs.chapter_name }}.docx $REFERENCE_DOC
 
       # 7. 上传 Docx 文件
       - name: Upload Docx Artifact
@@ -76,8 +95,7 @@ jobs:
           path: ${{ inputs.chapter_name }}.docx
           if-no-files-found: error
 
-      # 8. 上传 HTML 文件夹 (新增需求)
-      # 上传整个 build_output 目录，确保图片和 CSS 样式都包含在内
+      # 8. 上传 HTML 文件夹 (包含图片和样式)
       - name: Upload HTML Artifact
         uses: actions/upload-artifact@v4
         with:

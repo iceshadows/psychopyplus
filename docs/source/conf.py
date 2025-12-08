@@ -73,16 +73,16 @@ source_suffix = {
 master_doc = 'documentation'
 
 # General information about the project.
-project = u'PsychoPy'
-copyright = u'2002-18, Jonathan Peirce; 2019-21 Open Science Tools Ltd.'
+project = u'WrysysLab Studio'
+copyright = u'2025 Qingdao Deng Yun Zhi Shang Ltd.'
 
 # use restructured text epilog to get around problem with not being able to use replace and superscript together
 rst_epilog = """
 .. role:: raw-html(raw)
    :format: html
 
-.. |PsychoPy| replace:: :raw-html:`PsychoPy<sup>®</sup>`
-.. |Pavlovia| replace:: :raw-html:`<a href="https://pavlovia.org">Pavlovia<sup>®</sup></a>`
+.. |PsychoPy| replace:: :raw-html:`WrysysLab<sup>®</sup> Studio`
+.. |Pavlovia| replace:: :raw-html:`<a href="https://wearbbs.qduwp.xyz">WearBBS<sup>®</sup></a>`
 """
 
 # The version info for the project you're documenting, acts as replacement for
