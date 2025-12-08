@@ -1,0 +1,75 @@
+name: Sphinx to Docx (Specific Chapter)
+
+on:
+  # 允许手动触发，并输入要编译的章节
+  workflow_dispatch:
+    inputs:
+      chapter_name:
+        description: '要编译的章节文件名 (相对于 source 目录，不带后缀)'
+        required: true
+        default: 'index'
+        type: string
+      source_dir:
+        description: 'Sphinx source 目录路径'
+        required: true
+        default: 'docs'
+
+jobs:
+  build_docx:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 安装 Python 环境
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      # 3. 安装 Pandoc (核心转换工具)
+      - name: Install Pandoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc
+
+      # 4. 安装 Python 依赖
+      - name: Install Sphinx dependencies
+        run: |
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f ${{ inputs.source_dir }}/requirements.txt ]; then pip install -r ${{ inputs.source_dir }}/requirements.txt; fi
+          # 确保安装了 sphinx
+          pip install sphinx
+
+      # 5. 编译 HTML (关键步骤)
+      # -b singlehtml: 生成单页 HTML (适合转 Word)
+      # -D master_doc=...: 动态修改入口文件，从而只编译指定章节
+      - name: Build SingleHTML with Sphinx
+        run: |
+          echo "Building chapter: ${{ inputs.chapter_name }}"
+          sphinx-build -b singlehtml \
+            -D master_doc="${{ inputs.chapter_name }}" \
+            ${{ inputs.source_dir }} \
+            build_output
+
+      # 6. 使用 Pandoc 将 HTML 转为 Docx
+      - name: Convert HTML to Docx
+        run: |
+          cd build_output
+          # singlehtml 模式下，输出文件通常固定为 index.html (即便 master_doc 变了)
+          # 我们将其转换为以章节名命名的 docx
+          pandoc index.html -o ../${{ inputs.chapter_name }}.docx \
+            --reference-doc=../reference.docx || echo "No reference doc found, using default styles"
+            
+          # 注意：如果你有自定义样式的 reference.docx，放在仓库根目录即可生效
+          # 如果没有，Pandoc 会使用默认样式，上面命令里的 || echo ... 保证不会报错
+
+      # 7. 上传生成的 Docx 文件
+      - name: Upload Docx Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docx-output-${{ github.run_id }}
+          path: ${{ inputs.chapter_name }}.docx
+          if-no-files-found: error
